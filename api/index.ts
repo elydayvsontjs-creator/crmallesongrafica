@@ -1,6 +1,6 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { IncomingMessage, ServerResponse } from 'http';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY!;
@@ -328,6 +328,6 @@ app.get('/api/billing/distribution', async (req, res) => {
 });
 
 // ─── Handler Vercel ───────────────────────────────────────────────────────────
-export default function handler(req: VercelRequest, res: VercelResponse) {
+export default function handler(req: IncomingMessage, res: ServerResponse) {
     return app(req as any, res as any);
 }
