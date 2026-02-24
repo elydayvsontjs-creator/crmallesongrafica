@@ -250,7 +250,7 @@ export default function App() {
     } catch (e) { console.error(e); }
   };
 
-  const handleCreateCustomer = async (data: any) => {
+  const handleCreateCustomer = async (data: any): Promise<string | null> => {
     try {
       const res = await authFetch('/api/customers', {
         method: 'POST',
@@ -259,13 +259,16 @@ export default function App() {
 
       const result = await res.json();
       if (!res.ok) {
-        alert(result.error || "Erro ao criar cliente");
-        return;
+        return result.error || 'Erro ao criar cliente';
       }
       setIsCustomerModalOpen(false);
       fetchCustomers();
       fetchStats();
-    } catch (e) { console.error(e); }
+      return null;
+    } catch (e) {
+      console.error(e);
+      return 'Erro de conexão. Tente novamente.';
+    }
   };
 
   const handleCreateOrder = async (data: any) => {
@@ -788,7 +791,7 @@ export default function App() {
       <AnimatePresence>
         {isCustomerModalOpen && (
           <Modal title="Novo Cliente" onClose={() => setIsCustomerModalOpen(false)}>
-            <CustomerForm onSubmit={handleCreateCustomer} onCancel={() => setIsCustomerModalOpen(false)} />
+            <CustomerForm onSubmit={handleCreateCustomer as any} onCancel={() => setIsCustomerModalOpen(false)} />
           </Modal>
         )}
 
@@ -866,22 +869,48 @@ function StatusBadge({ status }: { status: Order['status'] }) {
   );
 }
 
-function CustomerForm({ onSubmit, onCancel }: { onSubmit: (data: any) => void, onCancel: () => void }) {
-  const { register, handleSubmit, setValue } = useForm();
+function CustomerForm({ onSubmit, onCancel }: { onSubmit: (data: any) => Promise<string | null>, onCancel: () => void }) {
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm();
+  const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState('');
+
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const masked = maskPhone(e.target.value);
-    setValue('phone', masked);
+    setValue('phone', masked, { shouldValidate: true });
   };
+
+  const onFormSubmit = async (data: any) => {
+    setLoading(true);
+    setServerError('');
+    const error = await onSubmit(data);
+    if (error) {
+      setServerError(error);
+      setLoading(false);
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+    <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <label className="text-sm font-bold text-slate-400 uppercase tracking-widest">Nome Completo *</label>
-          <input {...register('name', { required: true })} className="input-field" placeholder="Ex: João Silva" />
+          <input
+            {...register('name', { required: 'Nome é obrigatório' })}
+            className={`input-field ${errors.name ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+            placeholder="Ex: João Silva"
+          />
+          {errors.name && <p className="text-red-400 text-xs font-bold">{errors.name.message as string}</p>}
         </div>
         <div className="space-y-2">
           <label className="text-sm font-bold text-slate-400 uppercase tracking-widest">Telefone *</label>
-          <input {...register('phone', { required: true })} onChange={handlePhoneChange} placeholder="(00) 00000-0000" maxLength={15} className="input-field" />
+          <input
+            {...register('phone', { required: 'Telefone é obrigatório' })}
+            onChange={handlePhoneChange}
+            placeholder="(00) 00000-0000"
+            maxLength={15}
+            className={`input-field ${errors.phone ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+          />
+          {errors.phone && <p className="text-red-400 text-xs font-bold">{errors.phone.message as string}</p>}
         </div>
         <div className="space-y-2">
           <label className="text-sm font-bold text-slate-400 uppercase tracking-widest">Email</label>
@@ -892,9 +921,18 @@ function CustomerForm({ onSubmit, onCancel }: { onSubmit: (data: any) => void, o
           <input {...register('company')} className="input-field" placeholder="Nome da Empresa (Opcional)" />
         </div>
       </div>
+
+      {serverError && (
+        <p className="text-red-400 text-sm font-bold text-center bg-red-500/10 px-4 py-3 rounded-xl">
+          {serverError}
+        </p>
+      )}
+
       <div className="flex justify-end gap-4 pt-6 border-t border-slate-800">
-        <button type="button" onClick={onCancel} className="btn-secondary">Cancelar</button>
-        <button type="submit" className="btn-primary">Salvar Cliente</button>
+        <button type="button" onClick={onCancel} className="btn-secondary" disabled={loading}>Cancelar</button>
+        <button type="submit" className="btn-primary" disabled={loading}>
+          {loading ? 'Salvando...' : 'Salvar Cliente'}
+        </button>
       </div>
     </form>
   );

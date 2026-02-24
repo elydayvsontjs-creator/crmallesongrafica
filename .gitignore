@@ -4,6 +4,15 @@ dist/
 coverage/
 .DS_Store
 *.log
+
+# Variáveis de ambiente — NUNCA commite estes arquivos!
 .env
 .env.local
+.env.*.local
+
+# Arquivos legados (SQLite local)
+*.db
 crmallesongrafica/
+
+# Vercel
+.vercel/
