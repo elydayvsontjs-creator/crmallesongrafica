@@ -22,7 +22,7 @@ export interface Order {
   total_price: number;
   order_date: string;
   delivery_date: string;
-  status: 'Orçamento' | 'Em Produção' | 'Finalizado' | 'Entregue';
+  status: 'Orçamento' | 'Em Produção' | 'Finalizado' | 'Entregue' | 'Arquivado';
   notes?: string;
   batch_id?: string;
   batch_items?: Order[];

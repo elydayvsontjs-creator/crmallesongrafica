@@ -26,7 +26,9 @@ import {
   MoreHorizontal,
   Mail,
   Lock,
-  ArrowRight
+  ArrowRight,
+  Archive,
+  CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -170,6 +172,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'customers' | 'billing'>('dashboard');
+  const [orderTab, setOrderTab] = useState<'all' | 'pending' | 'finished' | 'archived'>('all');
   const [stats, setStats] = useState<any>({ totalOrders: 0, ongoingOrders: 0, monthlyRevenue: 0, totalCustomers: 0, pendingOrders: 0 });
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -325,6 +328,16 @@ export default function App() {
     if (selectedOrder?.id === id) setSelectedOrder(null);
   };
 
+  const handleArchiveOrder = async (id: number) => {
+    await authFetch(`/api/orders/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'Arquivado' }),
+    });
+    fetchOrders();
+    fetchStats();
+    fetchBillingData();
+  };
+
   const handleDeleteCustomer = async (id: number) => {
     if (!confirm('Tem certeza que deseja excluir este cliente? Todos os seus pedidos também serão excluídos.')) return;
     await authFetch(`/api/customers/${id}`, { method: 'DELETE' });
@@ -409,11 +422,17 @@ export default function App() {
     return [...singleOrders, ...processedGroups].sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
   }, [orders]);
 
-  const filteredOrders = groupedOrders.filter(order =>
-    order.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.customer_phone.includes(searchTerm) ||
-    order.service_type.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredOrders = React.useMemo(() => {
+    const bySearch = groupedOrders.filter(order =>
+      order.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.customer_phone.includes(searchTerm) ||
+      order.service_type.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    if (orderTab === 'pending') return bySearch.filter(o => o.status !== 'Entregue' && o.status !== 'Arquivado');
+    if (orderTab === 'finished') return bySearch.filter(o => o.status === 'Entregue');
+    if (orderTab === 'archived') return bySearch.filter(o => o.status === 'Arquivado');
+    return bySearch.filter(o => o.status !== 'Arquivado');
+  }, [groupedOrders, searchTerm, orderTab]);
 
   const filteredCustomers = customers.filter(customer =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -657,10 +676,39 @@ export default function App() {
           {activeTab === 'orders' && (
             <div className="glass-card overflow-hidden">
               <div className="p-6 border-b border-slate-800 flex flex-wrap gap-4 items-center justify-between">
-                <div className="flex gap-2">
-                  <button className="px-4 py-2 bg-primary-accent text-white rounded-xl text-xs font-bold">Todos</button>
-                  <button className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl text-xs font-bold hover:text-white transition-all">Pendentes</button>
-                  <button className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl text-xs font-bold hover:text-white transition-all">Arquivados</button>
+                <div className="flex gap-2 flex-wrap">
+                  {([
+                    { key: 'all', label: 'Todos' },
+                    { key: 'pending', label: 'Pendentes' },
+                    { key: 'finished', label: 'Finalizados' },
+                    { key: 'archived', label: 'Arquivados' },
+                  ] as const).map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setOrderTab(tab.key)}
+                      className={cn(
+                        'px-4 py-2 rounded-xl text-xs font-bold transition-all',
+                        orderTab === tab.key
+                          ? tab.key === 'archived'
+                            ? 'bg-slate-600 text-white'
+                            : tab.key === 'finished'
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-primary-accent text-white'
+                          : 'bg-slate-800 text-slate-400 hover:text-white'
+                      )}
+                    >
+                      {tab.label}
+                      <span className={cn(
+                        'ml-2 px-1.5 py-0.5 rounded-full text-[10px]',
+                        orderTab === tab.key ? 'bg-white/20' : 'bg-slate-700'
+                      )}>
+                        {tab.key === 'all' && groupedOrders.filter(o => o.status !== 'Arquivado').length}
+                        {tab.key === 'pending' && groupedOrders.filter(o => o.status !== 'Entregue' && o.status !== 'Arquivado').length}
+                        {tab.key === 'finished' && groupedOrders.filter(o => o.status === 'Entregue').length}
+                        {tab.key === 'archived' && groupedOrders.filter(o => o.status === 'Arquivado').length}
+                      </span>
+                    </button>
+                  ))}
                 </div>
                 <div className="flex gap-3">
                   <button className="p-2.5 bg-slate-800 text-slate-400 rounded-xl hover:text-white transition-all border border-slate-700"><Filter size={18} /></button>
@@ -671,6 +719,20 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {orderTab === 'finished' && (
+                <div className="px-8 py-3 bg-emerald-500/5 border-b border-emerald-500/20 flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-400" />
+                  <p className="text-xs font-bold text-emerald-400">Pedidos com status <strong>Entregue</strong> — finalizados com sucesso.</p>
+                </div>
+              )}
+              {orderTab === 'archived' && (
+                <div className="px-8 py-3 bg-slate-700/20 border-b border-slate-700/30 flex items-center gap-2">
+                  <Archive size={16} className="text-slate-400" />
+                  <p className="text-xs font-bold text-slate-400">Pedidos arquivados não aparecem nas demais abas.</p>
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -684,8 +746,17 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
+                    {filteredOrders.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-8 py-16 text-center text-slate-500 font-bold">
+                          {orderTab === 'archived' ? 'Nenhum pedido arquivado.' :
+                            orderTab === 'finished' ? 'Nenhum pedido finalizado ainda.' :
+                              orderTab === 'pending' ? 'Sem pedidos pendentes.' : 'Nenhum pedido encontrado.'}
+                        </td>
+                      </tr>
+                    )}
                     {filteredOrders.map((order) => (
-                      <tr key={order.id} className="table-row group">
+                      <tr key={order.id} className={cn('table-row group', order.status === 'Arquivado' && 'opacity-60')}>
                         <td className="px-8 py-5 text-slate-400 font-mono text-xs">#ORD-{order.id}</td>
                         <td className="px-8 py-5">
                           <div className="flex items-center gap-3">
@@ -699,8 +770,31 @@ export default function App() {
                         </td>
                         <td className="px-8 py-5 text-right font-black text-white text-sm">{formatCurrency(order.total_price)}</td>
                         <td className="px-8 py-5">
-                          <div className="flex justify-center gap-2">
-                            <button onClick={() => setSelectedOrder(order)} className="p-2 text-slate-500 hover:text-white transition-all"><MoreHorizontal size={20} /></button>
+                          <div className="flex justify-center gap-1">
+                            <button
+                              onClick={() => setSelectedOrder(order)}
+                              title="Ver detalhes"
+                              className="p-2 text-slate-500 hover:text-white transition-all rounded-xl hover:bg-slate-800"
+                            >
+                              <MoreHorizontal size={20} />
+                            </button>
+                            {order.status !== 'Arquivado' ? (
+                              <button
+                                onClick={() => handleArchiveOrder(order.id)}
+                                title="Arquivar pedido"
+                                className="p-2 text-slate-500 hover:text-amber-400 transition-all opacity-0 group-hover:opacity-100 rounded-xl hover:bg-slate-800"
+                              >
+                                <Archive size={18} />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => updateOrderStatus(order.id, 'Orçamento')}
+                                title="Restaurar pedido"
+                                className="p-2 text-slate-500 hover:text-emerald-400 transition-all opacity-0 group-hover:opacity-100 rounded-xl hover:bg-slate-800"
+                              >
+                                <ArrowRight size={18} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -883,14 +977,15 @@ function Modal({ title, children, onClose }: { title: string, children: React.Re
 }
 
 function StatusBadge({ status }: { status: Order['status'] }) {
-  const styles = {
+  const styles: Record<string, string> = {
     'Orçamento': 'bg-amber-500/10 text-amber-500',
     'Em Produção': 'bg-blue-500/10 text-blue-500',
     'Finalizado': 'bg-indigo-500/10 text-indigo-500',
     'Entregue': 'bg-emerald-500/10 text-emerald-500',
+    'Arquivado': 'bg-slate-700/50 text-slate-400',
   };
   return (
-    <span className={cn("badge", styles[status])}>
+    <span className={cn("badge", styles[status] ?? 'bg-slate-700/50 text-slate-400')}>
       {status}
     </span>
   );
@@ -1171,6 +1266,11 @@ function OrderDetails({ order, onUpdateStatus, onGeneratePDF, onShareWhatsApp, o
                     {s}
                   </button>
                 ))}
+                {fullOrder.status === 'Arquivado' && (
+                  <div className="col-span-2 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-slate-700 bg-slate-800/50 text-slate-500 text-center">
+                    📦 Pedido Arquivado
+                  </div>
+                )}
               </div>
             </div>
             <div>
