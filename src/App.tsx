@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from './lib/supabase';
+import { supabase, supabaseConfigured } from './lib/supabase';
 import { authFetch } from './lib/authFetch';
 import type { Session } from '@supabase/supabase-js';
 import {
@@ -424,6 +424,33 @@ export default function App() {
   // Derivar user do session
   const user = session?.user;
   const userName = user?.email?.split('@')[0] || 'Usuário';
+
+  // Tela de erro: variáveis de ambiente ausentes
+  if (!supabaseConfigured) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg-dark p-4">
+        <div className="glass-card p-10 max-w-md w-full text-center space-y-6">
+          <div className="w-16 h-16 bg-red-500/20 rounded-2xl flex items-center justify-center mx-auto">
+            <Package className="text-red-400 w-8 h-8" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black text-white mb-2">⚠️ Configuração Pendente</h2>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              As variáveis de ambiente do Supabase não estão configuradas.
+              Acesse o painel do Vercel e adicione:
+            </p>
+          </div>
+          <div className="bg-slate-900 rounded-2xl p-4 text-left space-y-2 border border-slate-800">
+            <p className="text-xs font-mono text-emerald-400">VITE_SUPABASE_URL</p>
+            <p className="text-xs font-mono text-emerald-400">VITE_SUPABASE_ANON_KEY</p>
+          </div>
+          <p className="text-slate-500 text-xs">
+            Vercel Dashboard → Settings → Environment Variables → Redeploy
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (authLoading) {
     return (
